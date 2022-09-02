@@ -189,7 +189,11 @@ void bx_hard_drive_c::init(void)
       BX_HD_THIS channels[channel].ioaddr1 = SIM->get_param_num("ioaddr1", base)->get();
       BX_HD_THIS channels[channel].ioaddr2 = SIM->get_param_num("ioaddr2", base)->get();
       BX_HD_THIS channels[channel].irq = SIM->get_param_num("irq", base)->get();
-
+      BX_INFO(("ASDF INFO ata channel %d: io1=0x%x, io2=%x, irq=%d",
+          channel,
+          BX_HD_THIS channels[channel].ioaddr1,
+          BX_HD_THIS channels[channel].ioaddr2,
+          BX_HD_THIS channels[channel].irq));
       // Coherency check
       if ((BX_HD_THIS channels[channel].ioaddr1 == 0) ||
           (BX_HD_THIS channels[channel].ioaddr2 == 0) ||
@@ -3277,13 +3281,14 @@ bx_hard_drive_c::raise_interrupt(Bit8u channel)
 {
   if (!BX_SELECTED_CONTROLLER(channel).control.disable_irq) {
     Bit32u irq = BX_HD_THIS channels[channel].irq;
-    BX_DEBUG(("raising interrupt %d {%s}", irq, BX_SELECTED_TYPE_STRING(channel)));
+    BX_INFO(("ASDF HARDDRV: raising interrupt %d {%s}", irq, BX_SELECTED_TYPE_STRING(channel)));
 #if BX_SUPPORT_PCI
     DEV_ide_bmdma_set_irq(channel);
 #endif
     DEV_pic_raise_irq(irq);
   } else {
-    BX_DEBUG(("not raising interrupt {%s}", BX_SELECTED_TYPE_STRING(channel)));
+    Bit32u irq = BX_HD_THIS channels[channel].irq;
+    BX_INFO(("ASDF HARDDRV: not raising interrupt %d {%s}", irq, BX_SELECTED_TYPE_STRING(channel)));
   }
 }
 

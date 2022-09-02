@@ -137,7 +137,7 @@ void BX_CPU_C::InterruptAcknowledge(void)
 #endif
     // if no local APIC, always acknowledge the PIC.
     vector = DEV_pic_iac(); // may set INTR with next interrupt
-
+    BX_INFO(("ASDF InterruptAcknowledge vector: %x", vector));
   BX_CPU_THIS_PTR EXT = 1; /* external event */
 #if BX_SUPPORT_VMX
   VMexit_Event(BX_EXTERNAL_INTERRUPT, vector, 0, 0);

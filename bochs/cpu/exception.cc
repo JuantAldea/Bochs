@@ -27,6 +27,20 @@
 
 #include "param_names.h"
 #include "iodev/iodev.h"
+#include <execinfo.h>
+
+static void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+}
+
 
 #if BX_SUPPORT_X86_64==0
 // Make life easier merging cpu64 & cpu code.
@@ -784,8 +798,12 @@ void BX_CPU_C::interrupt(Bit8u vector, unsigned type, bool push_error, Bit16u er
     default:
       BX_PANIC(("interrupt(): unknown exception type %d", type));
   }
+  if (vector == 0x2f){
+     handler(0x2f);
+     BX_PANIC(("ASDF interrupt(): 2f"));
+  }
 
-  BX_DEBUG(("interrupt(): vector = %02x, TYPE = %u, EXT = %u",
+  BX_INFO(("ASDF interrupt(): vector = %02x, TYPE = %u, EXT = %u",
       vector, type, (unsigned) BX_CPU_THIS_PTR EXT));
 
   // Discard any traps and inhibits for new context; traps will

@@ -27,6 +27,21 @@
 #include "iodev.h"
 #include "pic.h"
 
+#include <execinfo.h>
+
+static void handler(int sig) {
+  void *array[10];
+  size_t size;
+
+  // get void*'s for all entries on the stack
+  size = backtrace(array, 10);
+
+  // print out all the frames to stderr
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  backtrace_symbols_fd(array, size, STDERR_FILENO);
+}
+
+
 #define LOG_THIS thePic->
 
 bx_pic_c *thePic = NULL;
@@ -455,12 +470,15 @@ void bx_pic_c::lower_irq(unsigned irq_no)
 
   Bit8u mask = (1 << (irq_no & 7));
   if ((irq_no <= 7) && (BX_PIC_THIS s.master_pic.IRQ_in & mask)) {
-    BX_DEBUG(("IRQ line %d now low", irq_no));
+    BX_INFO(("ASDF IRQ line %d now low", irq_no));
     BX_PIC_THIS s.master_pic.IRQ_in &= ~(mask);
     BX_PIC_THIS s.master_pic.irr &= ~(mask);
   } else if ((irq_no > 7) && (irq_no <= 15) &&
              (BX_PIC_THIS s.slave_pic.IRQ_in & mask)) {
-    BX_DEBUG(("IRQ line %d now low", irq_no));
+    if (irq_no == 14){
+        handler(irq_no);
+    }
+    BX_INFO(("ASDF IRQ line %d now low", irq_no));
     BX_PIC_THIS s.slave_pic.IRQ_in &= ~(mask);
     BX_PIC_THIS s.slave_pic.irr &= ~(mask);
   }
@@ -477,15 +495,16 @@ void bx_pic_c::raise_irq(unsigned irq_no)
 
   Bit8u mask = (1 << (irq_no & 7));
   if ((irq_no <= 7) && !(BX_PIC_THIS s.master_pic.IRQ_in & mask)) {
-    BX_DEBUG(("IRQ line %d now high", irq_no));
+    BX_INFO(("ASDF MASTER IRQ line %d now high", irq_no));
     BX_PIC_THIS s.master_pic.IRQ_in |= mask;
     BX_PIC_THIS s.master_pic.irr |= mask;
     pic_service(& BX_PIC_THIS s.master_pic);
   } else if ((irq_no > 7) && (irq_no <= 15) &&
              !(BX_PIC_THIS s.slave_pic.IRQ_in & mask)) {
-    BX_DEBUG(("IRQ line %d now high", irq_no));
+    BX_INFO(("ASDF SLAVE IRQ line %d now high", irq_no));
     BX_PIC_THIS s.slave_pic.IRQ_in |= mask;
     BX_PIC_THIS s.slave_pic.irr |= mask;
+    BX_INFO(("ASDF slave irr: %x", s.slave_pic.irr ));
     pic_service(& BX_PIC_THIS s.slave_pic);
   }
 }
@@ -554,6 +573,9 @@ void bx_pic_c::pic_service(bx_pic_t *pic)
   }
 
   /* now, see if there are any higher priority requests */
+  BX_INFO(("ASDF Interrupt requests: %x", pic->irr));
+  BX_INFO(("ASDF Interrupt mask: %x", pic->imr));
+  BX_INFO(("ASDF Unmasked Interrupts: %x", (pic->irr & ~pic->imr)));
   if ((unmasked_requests = (pic->irr & ~pic->imr))) {
     irq = highest_priority;
     do {
@@ -562,7 +584,7 @@ void bx_pic_c::pic_service(bx_pic_t *pic)
        */
       if (!(pic->special_mask && ((isr >> irq) & 0x01))) {
         if (!pic->INT && (unmasked_requests & (1 << irq))) {
-          BX_DEBUG(("signalling IRQ #%u", pic->master ? irq : irq + 8));
+          BX_INFO(("ASDF signalling IRQ #%u", pic->master ? irq : irq + 8));
           pic->INT = 1;
           pic->irq = irq;
           if (pic->master) {
@@ -616,11 +638,15 @@ Bit8u bx_pic_c::IAC(void)
     BX_PIC_THIS s.slave_pic.INT = 0;
     BX_PIC_THIS s.master_pic.IRQ_in &= ~(1 << 2);
     // Check for spurious interrupt
+    irq    = BX_PIC_THIS s.slave_pic.irq;
+    Bit8u offset = BX_PIC_THIS s.slave_pic.interrupt_offset;
+    vector = irq + offset;
+    Bit8u irr = BX_PIC_THIS s.slave_pic.irr;
+    BX_INFO(("ASDF IAC SLAVE_IRQ: %x, SLAVE_OFFSET: %x, VECTOR: %x (IRR: %x)", irq, offset, vector, irr));
     if ((BX_PIC_THIS s.slave_pic.irr & ~BX_PIC_THIS s.slave_pic.imr) == 0) {
+      BX_INFO(("ASDF IAC: SLAVE PIC SPURIUS!"));
       return (BX_PIC_THIS s.slave_pic.interrupt_offset + 7);
     }
-    irq    = BX_PIC_THIS s.slave_pic.irq;
-    vector = irq + BX_PIC_THIS s.slave_pic.interrupt_offset;
     // In level sensitive mode don't clear the irr bit.
     if (!(BX_PIC_THIS s.slave_pic.edge_level & (1 << BX_PIC_THIS s.slave_pic.irq)))
       BX_PIC_THIS s.slave_pic.irr &= ~(1 << BX_PIC_THIS s.slave_pic.irq);
